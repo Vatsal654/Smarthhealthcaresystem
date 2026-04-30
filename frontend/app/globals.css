@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 @import 'leaflet/dist/leaflet.css';
-@import '@livekit/components-styles';
 
 :root {
   --background: 250 250 251;

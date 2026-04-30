@@ -13,6 +13,7 @@ import {
 } from '@livekit/components-react';
 import { Track } from 'livekit-client';
 import toast from 'react-hot-toast';
+import '@livekit/components-styles';
 import { api, apiError } from '@/lib/api';
 
 export default function VideoPage() {
