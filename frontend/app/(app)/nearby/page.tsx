@@ -51,7 +51,13 @@ function NearbyPage() {
     api
       .get('/maps/nearby', { params: { lat: origin.lat, lng: origin.lng, type, radius: 5000 } })
       .then(({ data }) => setPlaces(data.places || []))
-      .catch((err) => toast.error(apiError(err)))
+      .catch((err) => {
+        // The endpoint always returns places=[] on upstream failure now,
+        // so only show a toast for true network errors.
+        const msg = apiError(err);
+        if (!err?.response) toast.error(msg);
+        setPlaces([]);
+      })
       .finally(() => setLoading(false));
   }, [origin, type]);
 

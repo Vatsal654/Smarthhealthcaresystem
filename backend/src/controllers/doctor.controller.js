@@ -83,3 +83,99 @@ exports.specialties = asyncHandler(async (req, res) => {
   });
   res.json({ specialties: list.sort() });
 });
+
+exports.myDashboard = asyncHandler(async (req, res) => {
+  const Appointment = require('../models/Appointment');
+  const doctor = await Doctor.findOne({ user: req.user.id });
+  if (!doctor) throw ApiError.notFound('Doctor profile not found');
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [todayAppts, pending, recent, totalCompleted] = await Promise.all([
+    Appointment.find({ doctor: doctor._id, date: today })
+      .populate('patient', 'name email avatarUrl')
+      .sort({ time: 1 })
+      .lean(),
+    Appointment.find({ doctor: doctor._id, status: 'pending' })
+      .populate('patient', 'name email avatarUrl')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean(),
+    Appointment.find({ doctor: doctor._id })
+      .populate('patient', 'name email avatarUrl')
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean(),
+    Appointment.countDocuments({ doctor: doctor._id, status: 'completed' }),
+  ]);
+
+  // unique patients ever seen
+  const patientIds = new Set(recent.map((a) => String(a.patient?._id || a.patient)));
+
+  res.json({
+    doctor,
+    stats: {
+      todayCount: todayAppts.length,
+      pendingCount: pending.length,
+      completedCount: totalCompleted,
+      uniquePatients: patientIds.size,
+    },
+    todayAppointments: todayAppts,
+    pendingAppointments: pending,
+    recentAppointments: recent,
+  });
+});
+
+exports.myPatients = asyncHandler(async (req, res) => {
+  const Appointment = require('../models/Appointment');
+  const doctor = await Doctor.findOne({ user: req.user.id });
+  if (!doctor) throw ApiError.notFound('Doctor profile not found');
+
+  const appts = await Appointment.find({ doctor: doctor._id })
+    .populate('patient', 'name email avatarUrl phone')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const map = new Map();
+  for (const a of appts) {
+    const id = String(a.patient?._id);
+    if (!id) continue;
+    if (!map.has(id)) {
+      map.set(id, {
+        patient: a.patient,
+        appointmentsCount: 0,
+        lastAppointment: a,
+      });
+    }
+    map.get(id).appointmentsCount += 1;
+  }
+
+  res.json({ patients: Array.from(map.values()) });
+});
+
+exports.myDoctors = asyncHandler(async (req, res) => {
+  const Appointment = require('../models/Appointment');
+  const appts = await Appointment.find({ patient: req.user.id })
+    .populate({
+      path: 'doctor',
+      populate: { path: 'user', select: 'name email avatarUrl' },
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const map = new Map();
+  for (const a of appts) {
+    const id = String(a.doctor?._id);
+    if (!id) continue;
+    if (!map.has(id)) {
+      map.set(id, {
+        doctor: a.doctor,
+        appointmentsCount: 0,
+        lastAppointment: a,
+      });
+    }
+    map.get(id).appointmentsCount += 1;
+  }
+
+  res.json({ doctors: Array.from(map.values()) });
+});

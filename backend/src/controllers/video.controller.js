@@ -26,9 +26,11 @@ exports.getToken = asyncHandler(async (req, res) => {
     const isDoctor = doctor && String(appt.doctor) === String(doctor._id);
 
     if (!isPatient && !isDoctor) throw ApiError.forbidden();
-    if (appt.status !== 'confirmed' && appt.status !== 'completed') {
-      throw ApiError.badRequest('Appointment must be confirmed to start video');
+    if (appt.status === 'cancelled') {
+      throw ApiError.badRequest('This appointment was cancelled');
     }
+    // Both pending and confirmed are allowed to join — useful for early
+    // testing or the doctor jumping in to triage immediately.
 
     room = appt.videoRoom || `appt_${appt._id}`;
   }

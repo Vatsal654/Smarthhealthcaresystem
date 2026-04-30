@@ -207,6 +207,54 @@ frontend/
 
 ---
 
+## Where the data lives (admin access to MongoDB)
+
+All data is stored in your **MongoDB Atlas** cluster, in the database
+named `shs` (set by the `/shs` segment of your `MONGO_URI`).
+
+### Browse and edit data via Atlas UI
+
+1. Go to https://cloud.mongodb.com and sign in.
+2. **Database → Browse Collections** on Cluster0.
+3. Select database `shs`. You'll see these collections:
+
+   | Collection | What it stores |
+   | --- | --- |
+   | `users` | Patients, doctors, admins (login + role) |
+   | `doctors` | Doctor-specific profile (specialization, license, verification) |
+   | `appointments` | Bookings linking patient ↔ doctor |
+   | `medicalprofiles` | Patient health records |
+   | `diseases` | The symptom-engine knowledge base |
+   | `aireports` | Every AI Checker run, scoped per user |
+   | `messages` | Chat history (room-keyed) |
+   | `notifications` | In-app notifications |
+   | `prescriptions` | Doctor-issued prescriptions |
+
+4. Click any collection → **Insert / Edit / Delete documents** directly.
+
+### Browse via VS Code or MongoDB Compass
+
+Easier for bulk editing:
+
+1. Install [MongoDB for VS Code](https://marketplace.visualstudio.com/items?itemName=mongodb.mongodb-vscode)
+   or [Compass](https://www.mongodb.com/products/compass).
+2. Connect using the same `MONGO_URI` from your `.env`.
+3. Open `shs` → edit any document.
+
+### Check data via the API
+
+The API server logs every Mongo connection on boot:
+
+```
+[INFO] MongoDB connected: cluster0-shard-00-00.../shs
+```
+
+You can also query through your authenticated admin account at:
+
+- `GET /api/admin/stats` — counts of users, doctors, appointments, diseases
+- `GET /api/admin/users` — list users
+- `GET /api/admin/doctors/pending` — doctors awaiting verification
+
 ## Safety note
 
 This product gives **indicative guidance only** and is not a medical

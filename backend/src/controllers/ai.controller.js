@@ -6,35 +6,66 @@ const asyncHandler = require('../utils/asyncHandler');
 const symptomEngine = require('../services/symptomEngine');
 const gemini = require('../services/gemini.service');
 
-exports.analyze = asyncHandler(async (req, res) => {
-  const { text, extraSymptoms = [], answers = {}, sessionId } = req.body;
+/**
+ * Step 1: extract symptoms and return follow-up questions WITHOUT
+ * running the full disease match. The frontend collects all answers
+ * and then calls /api/ai/finalize.
+ */
+exports.preliminary = asyncHandler(async (req, res) => {
+  const { text } = req.body;
+  if (!text || !text.trim()) throw ApiError.badRequest('Tell me what you are feeling.');
 
-  const result = await symptomEngine.analyze({ text, extraSymptoms, answers });
+  const result = await symptomEngine.analyze({ text, extraSymptoms: [], answers: {} });
 
-  const summary = await gemini.summarize({
+  if (!result.extractedSymptoms.length) {
+    return res.json({
+      sessionId: crypto.randomBytes(8).toString('hex'),
+      extractedSymptoms: [],
+      followUps: result.followUps,
+      message:
+        'I could not pick out specific symptoms yet. Could you describe what you feel — for example "fever and cough since 2 days"?',
+    });
+  }
+
+  res.json({
+    sessionId: crypto.randomBytes(8).toString('hex'),
+    extractedSymptoms: result.extractedSymptoms,
+    followUps: result.followUps,
+    message: `Got it — ${result.extractedSymptoms.join(', ')}. Just a few quick questions before I give you a report.`,
+  });
+});
+
+/**
+ * Step 2: full analysis. Takes original text + all collected answers,
+ * runs disease matching + Gemini-generated branded advice.
+ */
+exports.finalize = asyncHandler(async (req, res) => {
+  const { text, answers = {}, sessionId } = req.body;
+  if (!text || !text.trim()) throw ApiError.badRequest('Missing original symptom text.');
+
+  const extras = Object.entries(answers)
+    .filter(([k, v]) => k === 'extraSymptoms' && typeof v === 'string')
+    .map(([, v]) => v);
+
+  const result = await symptomEngine.analyze({ text, extraSymptoms: extras, answers });
+
+  const advice = await gemini.generateAdvice({
     extractedSymptoms: result.extractedSymptoms,
     matches: result.matches,
     overallRisk: result.overallRisk,
     answers,
   });
 
-  const adviceByRisk = {
-    green: 'Looks mild. Try home care and rest. Watch for worsening symptoms.',
-    yellow:
-      'Symptoms warrant attention. Consider booking a doctor consultation in the next 24–48 hours.',
-    red: 'Urgent: please connect with a doctor immediately or seek emergency care.',
-  };
-
   const payload = {
     sessionId: sessionId || crypto.randomBytes(8).toString('hex'),
-    inputSymptoms: text ? [text] : [],
+    inputSymptoms: [text],
     extractedSymptoms: result.extractedSymptoms,
     answers,
     matches: result.matches,
     topMatch: result.topMatch,
     overallRisk: result.overallRisk,
-    advice: adviceByRisk[result.overallRisk],
-    summary,
+    advice: typeof advice === 'string' ? advice : '',
+    summary: advice?.message || '',
   };
 
   let report = null;
@@ -48,13 +79,19 @@ exports.analyze = asyncHandler(async (req, res) => {
     matches: payload.matches,
     topMatch: payload.topMatch,
     overallRisk: payload.overallRisk,
-    followUps: result.followUps,
-    advice: payload.advice,
-    summary: payload.summary,
-    disclaimer:
-      'This tool provides indicative guidance only and is not a medical diagnosis.',
+    advice,
+    disclaimer: advice.disclaimer,
     reportId: report?._id || null,
   });
+});
+
+/**
+ * Legacy endpoint kept for backward compatibility — runs full pipeline
+ * in one shot (used by the dashboard quick-check).
+ */
+exports.analyze = asyncHandler(async (req, res) => {
+  req.body.finalize = true;
+  return exports.finalize(req, res);
 });
 
 exports.listReports = asyncHandler(async (req, res) => {
@@ -68,7 +105,11 @@ exports.listReports = asyncHandler(async (req, res) => {
 exports.getReport = asyncHandler(async (req, res) => {
   const report = await AIReport.findById(req.params.id).lean();
   if (!report) throw ApiError.notFound();
-  if (String(report.user) !== req.user.id && req.user.role !== 'doctor' && req.user.role !== 'admin') {
+  if (
+    String(report.user) !== req.user.id &&
+    req.user.role !== 'doctor' &&
+    req.user.role !== 'admin'
+  ) {
     throw ApiError.forbidden();
   }
   res.json({ report });

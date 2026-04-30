@@ -1,8 +1,14 @@
 const axios = require('axios');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const logger = require('../utils/logger');
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+// Multiple Overpass mirrors — first response wins.
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
+];
 
 const TYPE_MAP = {
   hospital: '[amenity=hospital]',
@@ -11,6 +17,23 @@ const TYPE_MAP = {
   doctors: '[amenity=doctors]',
   dentist: '[amenity=dentist]',
 };
+
+async function tryOverpass(query) {
+  let lastErr;
+  for (const url of OVERPASS_MIRRORS) {
+    try {
+      const { data } = await axios.post(url, query, {
+        headers: { 'Content-Type': 'text/plain' },
+        timeout: 25000,
+      });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      logger.warn(`Overpass mirror failed (${url}): ${err.code || err.message}`);
+    }
+  }
+  throw lastErr || new Error('All Overpass mirrors failed');
+}
 
 exports.nearby = asyncHandler(async (req, res) => {
   const { lat, lng, type = 'hospital', radius = 5000 } = req.query;
@@ -22,21 +45,16 @@ exports.nearby = asyncHandler(async (req, res) => {
   const r = Math.min(Number(radius), 20000);
 
   const query = `
-    [out:json][timeout:25];
+    [out:json][timeout:20];
     (
       node${tag}(around:${r},${lat},${lng});
       way${tag}(around:${r},${lat},${lng});
-      relation${tag}(around:${r},${lat},${lng});
     );
     out center 60;
   `;
 
   try {
-    const { data } = await axios.post(OVERPASS_URL, query, {
-      headers: { 'Content-Type': 'text/plain' },
-      timeout: 30000,
-    });
-
+    const data = await tryOverpass(query);
     const places = (data.elements || [])
       .map((el) => {
         const center = el.center || { lat: el.lat, lon: el.lon };
@@ -44,7 +62,7 @@ exports.nearby = asyncHandler(async (req, res) => {
         const t = el.tags || {};
         return {
           id: `${el.type}/${el.id}`,
-          name: t.name || (type[0].toUpperCase() + type.slice(1)),
+          name: t.name || prettifyType(type),
           lat: center.lat,
           lng: center.lon,
           phone: t.phone || t['contact:phone'] || null,
@@ -61,12 +79,20 @@ exports.nearby = asyncHandler(async (req, res) => {
 
     res.json({ places });
   } catch (err) {
-    if (err.response) {
-      return res.status(502).json({ error: { message: 'Overpass API error' } });
-    }
-    throw err;
+    logger.error('Overpass failed across all mirrors', err.message);
+    res.status(502).json({
+      error: {
+        message:
+          'Could not reach the OpenStreetMap data service right now. Please try again in a moment.',
+      },
+      places: [],
+    });
   }
 });
+
+function prettifyType(t) {
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
 
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371000;
