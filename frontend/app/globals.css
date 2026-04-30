@@ -47,3 +47,74 @@ body {
 
 /* Leaflet marker fix in Next */
 .leaflet-container { height: 100%; width: 100%; border-radius: 1rem; }
+
+/* Minimal LiveKit room styles (replaces @livekit/components-styles) */
+.lk-video-conference,
+.lk-grid-layout {
+  background: #0b1220;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.lk-grid-layout {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.lk-participant-tile {
+  position: relative;
+  background: #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+.lk-participant-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lk-participant-tile .lk-participant-metadata {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.lk-control-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  background: #0b1220;
+  border-top: 1px solid #1e293b;
+}
+.lk-button,
+.lk-control-bar button {
+  background: #1e293b;
+  color: #fff;
+  border: 1px solid #334155;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lk-button:hover,
+.lk-control-bar button:hover {
+  background: #334155;
+}
+.lk-button[data-lk-source='disconnect'],
+.lk-disconnect-button {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+.lk-button[data-lk-source='disconnect']:hover,
+.lk-disconnect-button:hover {
+  background: #b91c1c;
+}
