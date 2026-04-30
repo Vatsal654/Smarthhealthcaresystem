@@ -8,7 +8,7 @@ const connectDB = require('./config/db');
 const registerSockets = require('./sockets');
 const logger = require('./utils/logger');
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 
 async function start() {
   await connectDB();
