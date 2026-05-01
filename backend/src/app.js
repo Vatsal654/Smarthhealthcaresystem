@@ -21,6 +21,7 @@ const aiRoutes = require('./routes/ai.routes');
 const mapsRoutes = require('./routes/maps.routes');
 const profileRoutes = require('./routes/profile.routes');
 const uploadRoutes = require('./routes/upload.routes');
+const prescriptionRoutes = require('./routes/prescription.routes');
 
 const app = express();
 
@@ -82,6 +83,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/maps', mapsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/prescriptions', prescriptionRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

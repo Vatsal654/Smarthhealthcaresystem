@@ -48,6 +48,33 @@ body {
 /* Leaflet marker fix in Next */
 .leaflet-container { height: 100%; width: 100%; border-radius: 1rem; }
 
+/* Smooth-in animations used across the app */
+@keyframes shs-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shs-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-in {
+  animation: shs-fade-up 0.35s ease-out both;
+}
+.fade-in {
+  animation: shs-fade 0.4s ease-out both;
+}
+button, a, .card, .input {
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.card:hover {
+  /* gentle lift on hoverable cards */
+}
+@media print {
+  body * { visibility: hidden; }
+  .card, .card * { visibility: visible; }
+  .card { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; }
+}
+
 /* Minimal LiveKit room styles (replaces @livekit/components-styles) */
 .lk-video-conference,
 .lk-grid-layout {

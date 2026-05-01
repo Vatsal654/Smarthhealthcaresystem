@@ -59,32 +59,64 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-16 pb-20 text-center">
-        <span className="chip mb-5"><Sparkles className="w-3.5 h-3.5 mr-1" /> AI-powered first-line healthcare</span>
-        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 max-w-3xl mx-auto leading-[1.05]">
-          Your trusted health companion,
-          <span className="block bg-gradient-to-r from-brand-600 to-teal-500 bg-clip-text text-transparent">
-            from symptom to specialist.
-          </span>
-        </h1>
-        <p className="text-slate-600 max-w-2xl mx-auto mt-5 text-lg">
-          SHS combines a medical-grade symptom engine with verified doctors and nearby care —
-          built for rural access, urban convenience, and everyone in between.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/signup" className="btn-primary px-6 py-3 text-base">
-            Talk to AI <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link href="/login" className="btn-outline px-6 py-3 text-base">
-            I already have an account
-          </Link>
-        </div>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-slate-500">
-          {['HIPAA-style data handling', 'Verified doctors only', 'Free to start'].map((t) => (
-            <span key={t} className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t}
-            </span>
-          ))}
+      <section className="max-w-6xl mx-auto px-6 pt-16 pb-12">
+        <div className="grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <span className="chip mb-5"><Sparkles className="w-3.5 h-3.5 mr-1" /> AI-powered first-line healthcare</span>
+            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.05]">
+              Your trusted health companion,
+              <span className="block bg-gradient-to-r from-brand-600 to-teal-500 bg-clip-text text-transparent">
+                from symptom to specialist.
+              </span>
+            </h1>
+            <p className="text-slate-600 mt-5 text-lg max-w-xl">
+              SHS combines a medical-grade symptom engine with verified doctors and nearby care —
+              built for rural access, urban convenience, and everyone in between.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link href="/signup" className="btn-primary px-6 py-3 text-base">
+                Talk to AI <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link href="/login" className="btn-outline px-6 py-3 text-base">
+                I already have an account
+              </Link>
+            </div>
+            <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-slate-500">
+              {['HIPAA-style data handling', 'Verified doctors only', 'Free to start'].map((t) => (
+                <span key={t} className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="relative">
+            <img
+              src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1200&q=80"
+              alt="Doctor consulting with patient"
+              className="rounded-3xl shadow-soft w-full object-cover aspect-[4/3]"
+            />
+            <div className="hidden md:block absolute -bottom-6 -left-6 bg-white rounded-2xl shadow-soft p-4 border border-slate-100 max-w-[220px]">
+              <div className="text-xs text-slate-500">AI-extracted symptoms</div>
+              <div className="text-sm font-semibold mt-1">Fever · Cough · Fatigue</div>
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                <span className="text-slate-600">Likely flu — yellow risk</span>
+              </div>
+            </div>
+            <div className="hidden md:block absolute -top-4 -right-4 bg-white rounded-2xl shadow-soft p-4 border border-slate-100">
+              <div className="flex items-center gap-2 text-xs">
+                <img
+                  src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=80&q=80"
+                  alt="Doctor"
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+                <div>
+                  <div className="text-sm font-semibold">Dr. Asha Rao</div>
+                  <div className="text-slate-500">verified · pulmonologist</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

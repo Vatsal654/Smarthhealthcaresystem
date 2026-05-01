@@ -8,6 +8,120 @@ const symptomEngine = require('../services/symptomEngine');
 const gemini = require('../services/gemini.service');
 
 /**
+ * Conversational AI triage.
+ * Frontend sends the entire dialogue each turn; backend extracts symptoms
+ * across all user messages, runs the disease engine for candidate ranking,
+ * then asks Gemini whether to ask another targeted question or finalize.
+ *
+ * Body:
+ *   { messages: [{role:'user'|'bot', content}], sessionId?, finalize?: boolean }
+ *
+ * Response:
+ *   { type: 'question', message, sessionId }
+ *   OR
+ *   { type: 'report', ...full report }
+ */
+exports.chat = asyncHandler(async (req, res) => {
+  const { messages = [], sessionId: sid, finalize: forceFinalize } = req.body;
+
+  if (!Array.isArray(messages) || !messages.some((m) => m.role === 'user')) {
+    throw ApiError.badRequest('messages array (with at least one user message) required');
+  }
+
+  const sessionId = sid || crypto.randomBytes(8).toString('hex');
+  const userText = messages
+    .filter((m) => m.role === 'user')
+    .map((m) => m.content)
+    .join('. ');
+
+  // Engine pass — extract symptoms from full conversation
+  const engineResult = await symptomEngine.analyze({
+    text: userText,
+    extraSymptoms: [],
+    answers: {},
+  });
+  const candidates = normalizeConfidences(engineResult.matches);
+
+  const userTurns = messages.filter((m) => m.role === 'user').length;
+  const botTurns = messages.filter((m) => m.role === 'bot' || m.role === 'assistant').length;
+
+  // Decide: ask another question, or finalize?
+  let decision;
+  if (forceFinalize) {
+    decision = { decision: 'finalize', question: '', reasoning: 'User requested finalize', redFlag: false };
+  } else {
+    decision = await gemini.nextStep({
+      conversation: messages,
+      extractedSymptoms: engineResult.extractedSymptoms,
+      candidates,
+      turnsAsked: botTurns,
+    });
+  }
+
+  if (decision.decision === 'ask') {
+    return res.json({
+      type: 'question',
+      message: decision.question,
+      reasoning: decision.reasoning,
+      sessionId,
+      progress: { userTurns, botTurns: botTurns + 1, maxTurns: 5 },
+    });
+  }
+
+  // Finalize — compute risk + advice
+  const overallRisk = engineResult.overallRisk;
+  const topMatch = candidates[0] || null;
+
+  let suggestedDoctors = [];
+  if (topMatch?.specialist) {
+    suggestedDoctors = await Doctor.find({
+      verificationStatus: 'verified',
+      specialization: new RegExp(topMatch.specialist, 'i'),
+    })
+      .populate('user', 'name email avatarUrl')
+      .sort({ rating: -1 })
+      .limit(4)
+      .lean();
+  }
+
+  const advice = await gemini.generateAdvice({
+    extractedSymptoms: engineResult.extractedSymptoms,
+    matches: candidates,
+    overallRisk,
+    answers: { conversation: messages },
+  });
+
+  const aiProvider = process.env.GEMINI_API_KEY ? 'gemini-1.5-flash' : 'rule-engine-fallback';
+
+  const report = await AIReport.create({
+    user: req.user.id,
+    sessionId,
+    inputSymptoms: messages.filter((m) => m.role === 'user').map((m) => m.content),
+    extractedSymptoms: engineResult.extractedSymptoms,
+    answers: { conversation: messages },
+    matches: candidates,
+    topMatch,
+    overallRisk,
+    advice: '',
+    summary: advice?.message || '',
+  });
+
+  res.json({
+    type: 'report',
+    sessionId,
+    extractedSymptoms: engineResult.extractedSymptoms,
+    matches: candidates,
+    topMatch,
+    overallRisk,
+    advice,
+    suggestedDoctors,
+    aiProvider,
+    disclaimer: advice.disclaimer,
+    reportId: report._id,
+  });
+});
+
+/**
  * Step 1: extract symptoms and return follow-up questions WITHOUT
  * running the full disease match. The frontend collects all answers
  * and then calls /api/ai/finalize.

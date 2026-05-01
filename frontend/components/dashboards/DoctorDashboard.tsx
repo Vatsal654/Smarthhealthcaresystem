@@ -87,6 +87,26 @@ export default function DoctorDashboard() {
         }
       />
 
+      <div className="relative card overflow-hidden mb-6 p-0 grid md:grid-cols-2">
+        <div className="p-7 flex flex-col justify-center">
+          <div className="text-xs font-semibold uppercase tracking-wide text-brand-600">SHS Doctor</div>
+          <h2 className="text-2xl md:text-3xl font-bold mt-2">
+            Care you deliver, simplified.
+          </h2>
+          <p className="text-slate-600 mt-2 max-w-md">
+            Manage today's consults, jump on a video call with a built-in whiteboard, and issue
+            digital prescriptions in one place.
+          </p>
+        </div>
+        <div className="hidden md:block">
+          <img
+            src="https://images.unsplash.com/photo-1612531822925-6d80a3aa57c9?auto=format&fit=crop&w=1200&q=80"
+            alt="Doctor at desk"
+            className="h-full w-full object-cover"
+          />
+        </div>
+      </div>
+
       {!verified && (
         <div className="card p-5 bg-amber-50/40 border-amber-200 mb-6">
           <div className="font-semibold text-amber-800">Awaiting admin verification</div>

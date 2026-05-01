@@ -15,6 +15,8 @@ const prescriptionSchema = new mongoose.Schema(
       },
     ],
     instructions: { type: String },
+    diagnosis: { type: String },
+    signatureDataUrl: { type: String }, // base64 data URL of signature canvas
     fileUrl: { type: String },
   },
   { timestamps: true }

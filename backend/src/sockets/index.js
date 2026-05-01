@@ -77,6 +77,21 @@ module.exports = function registerSockets(io) {
       socket.to(room).emit('chat:seen', { by: userId });
     });
 
+    // Whiteboard sync — broadcast strokes to everyone in the room.
+    socket.on('whiteboard:join', ({ room }) => {
+      if (room) socket.join(`wb:${room}`);
+    });
+
+    socket.on('whiteboard:stroke', ({ room, stroke }) => {
+      if (!room || !stroke) return;
+      socket.to(`wb:${room}`).emit('whiteboard:stroke', { stroke, from: userId });
+    });
+
+    socket.on('whiteboard:clear', ({ room }) => {
+      if (!room) return;
+      socket.to(`wb:${room}`).emit('whiteboard:clear', { from: userId });
+    });
+
     socket.on('disconnect', () => {
       const set = onlineUsers.get(userId);
       if (set) {

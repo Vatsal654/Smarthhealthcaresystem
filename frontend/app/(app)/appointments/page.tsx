@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Video, MessagesSquare, Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Video, MessagesSquare, Calendar, CheckCircle2, XCircle, Clock, FileSignature, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/PageHeader';
 import { api, apiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import PrescriptionForm from '@/components/PrescriptionForm';
+import PrescriptionView from '@/components/PrescriptionView';
 
 interface Appointment {
   _id: string;
@@ -31,12 +33,19 @@ export default function AppointmentsPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [rxFor, setRxFor] = useState<Appointment | null>(null);
+  const [viewing, setViewing] = useState<any | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const { data } = await api.get('/appointments');
-      setItems(data.appointments);
+      const [a, p] = await Promise.all([
+        api.get('/appointments'),
+        api.get('/prescriptions/mine').catch(() => ({ data: { prescriptions: [] } })),
+      ]);
+      setItems(a.data.appointments);
+      setPrescriptions(p.data.prescriptions || []);
     } catch (err) {
       toast.error(apiError(err));
     } finally {
@@ -54,6 +63,10 @@ export default function AppointmentsPage() {
     } catch (err) {
       toast.error(apiError(err));
     }
+  }
+
+  function prescriptionFor(apptId: string) {
+    return prescriptions.find((p) => String(p.appointment) === String(apptId));
   }
 
   return (
@@ -124,11 +137,37 @@ export default function AppointmentsPage() {
                     Mark complete
                   </button>
                 )}
+                {isDoctor && (a.status === 'confirmed' || a.status === 'completed') && (
+                  <button
+                    onClick={() => setRxFor(a)}
+                    className="btn-outline text-sm py-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  >
+                    <FileSignature className="w-4 h-4" /> Write Rx
+                  </button>
+                )}
+                {!isDoctor && prescriptionFor(a._id) && (
+                  <button
+                    onClick={() => setViewing(prescriptionFor(a._id))}
+                    className="btn-outline text-sm py-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  >
+                    <FileText className="w-4 h-4" /> View Rx
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {rxFor && (
+        <PrescriptionForm
+          appointmentId={rxFor._id}
+          patientName={rxFor.patient?.name}
+          onClose={() => setRxFor(null)}
+          onCreated={() => load()}
+        />
+      )}
+      {viewing && <PrescriptionView prescription={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }
