@@ -4,6 +4,18 @@ const Doctor = require('../models/Doctor');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
+exports.peer = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id)
+    .select('name email avatarUrl role')
+    .lean();
+  if (!user) throw ApiError.notFound('User not found');
+  let doctor = null;
+  if (user.role === 'doctor') {
+    doctor = await Doctor.findOne({ user: user._id }).lean();
+  }
+  res.json({ user, doctor });
+});
+
 function buildRoom(a, b) {
   return [String(a), String(b)].sort().join(':');
 }

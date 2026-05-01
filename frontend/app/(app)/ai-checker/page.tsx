@@ -43,6 +43,18 @@ interface Advice {
   disclaimer: string;
 }
 
+interface SuggestedDoctor {
+  _id: string;
+  specialization: string;
+  hospital?: string;
+  city?: string;
+  yearsOfExperience: number;
+  consultationFee: number;
+  rating: number;
+  bio?: string;
+  user: { _id: string; name: string; avatarUrl?: string };
+}
+
 interface FinalReport {
   sessionId: string;
   extractedSymptoms: string[];
@@ -50,6 +62,8 @@ interface FinalReport {
   topMatch: Match | null;
   overallRisk: Risk;
   advice: Advice;
+  suggestedDoctors: SuggestedDoctor[];
+  aiProvider?: string;
   disclaimer: string;
 }
 
@@ -388,26 +402,53 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
 
       {report.matches.length > 0 && (
         <div className="card p-5">
-          <div className="text-sm font-semibold text-slate-700 mb-3">
-            Symptoms may be associated with
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold text-slate-700">
+              Symptoms may be associated with
+            </div>
+            {report.aiProvider && (
+              <span className="text-[10px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-brand-500" />
+                Powered by {report.aiProvider}
+              </span>
+            )}
           </div>
           <div className="space-y-2">
             {report.matches.slice(0, 3).map((m) => (
-              <div key={m.name} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2.5">
-                <div>
-                  <div className="font-semibold">{m.name}</div>
-                  <div className="text-xs text-slate-500">
-                    Specialist: {m.specialist || 'General Physician'}
+              <div key={m.name} className="bg-slate-50 rounded-xl px-3 py-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{m.name}</div>
+                    <div className="text-xs text-slate-500">
+                      Specialist: {m.specialist || 'General Physician'}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-lg font-bold">{m.confidence}%</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">likelihood</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold">{m.confidence}%</div>
-                  <div className="text-[10px] uppercase tracking-wide text-slate-400">match</div>
+                <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-brand-500 to-teal-500"
+                    style={{ width: `${Math.max(2, m.confidence)}%` }}
+                  />
                 </div>
               </div>
             ))}
           </div>
+          <p className="text-[11px] text-slate-400 mt-3">
+            Likelihoods are normalized across the top matches to help you compare them.
+          </p>
         </div>
+      )}
+
+      {report.suggestedDoctors?.length > 0 && (
+        <SuggestedDoctorsCard
+          risk={risk}
+          specialty={report.topMatch?.specialist}
+          doctors={report.suggestedDoctors}
+        />
       )}
 
       {risk === 'green' && report.advice.remedies.length > 0 && (
@@ -504,6 +545,57 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
       <button onClick={onReset} className="btn-outline text-sm">
         <RotateCcw className="w-4 h-4" /> Run another check
       </button>
+    </div>
+  );
+}
+
+function SuggestedDoctorsCard({
+  risk,
+  specialty,
+  doctors,
+}: {
+  risk: Risk;
+  specialty?: string;
+  doctors: SuggestedDoctor[];
+}) {
+  const heading =
+    risk === 'red'
+      ? `Recommended specialists for urgent consultation`
+      : `Specialists for ${specialty || 'this concern'}`;
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 font-semibold text-slate-800">
+        <Stethoscope className={`w-4 h-4 ${risk === 'red' ? 'text-rose-600' : 'text-brand-600'}`} />
+        {heading}
+      </div>
+      <p className="text-xs text-slate-500 mt-1">
+        Verified doctors who match the suggested specialty.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3 mt-4">
+        {doctors.slice(0, 4).map((d) => (
+          <div key={d._id} className="border border-slate-100 rounded-xl p-3 flex gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-teal-500 grid place-items-center text-white font-semibold shrink-0">
+              {d.user?.name?.[0] || 'D'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-sm truncate">Dr. {d.user?.name}</div>
+              <div className="text-xs text-slate-500">{d.specialization}</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                {d.yearsOfExperience}y · ₹{d.consultationFee || 0} · ★ {d.rating || 'New'}
+              </div>
+              {d.bio && (
+                <div className="text-[11px] text-slate-500 mt-1 line-clamp-2">{d.bio}</div>
+              )}
+              <Link
+                href="/doctors"
+                className="text-[11px] text-brand-600 font-medium mt-1.5 inline-block"
+              >
+                Book →
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

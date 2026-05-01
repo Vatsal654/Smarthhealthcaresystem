@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const AIReport = require('../models/AIReport');
 const Disease = require('../models/Disease');
+const Doctor = require('../models/Doctor');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const symptomEngine = require('../services/symptomEngine');
@@ -49,20 +50,40 @@ exports.finalize = asyncHandler(async (req, res) => {
 
   const result = await symptomEngine.analyze({ text, extraSymptoms: extras, answers });
 
+  // Normalize raw match scores to a probability distribution so the
+  // top conditions visibly sum to 100% — never three things at "50% each".
+  const normalizedMatches = normalizeConfidences(result.matches);
+  const topMatch = normalizedMatches[0] || null;
+
+  // Pick suggested doctors (specialty + verified) for the top match.
+  let suggestedDoctors = [];
+  if (topMatch?.specialist) {
+    suggestedDoctors = await Doctor.find({
+      verificationStatus: 'verified',
+      specialization: new RegExp(topMatch.specialist, 'i'),
+    })
+      .populate('user', 'name email avatarUrl')
+      .sort({ rating: -1 })
+      .limit(4)
+      .lean();
+  }
+
   const advice = await gemini.generateAdvice({
     extractedSymptoms: result.extractedSymptoms,
-    matches: result.matches,
+    matches: normalizedMatches,
     overallRisk: result.overallRisk,
     answers,
   });
+
+  const aiProvider = process.env.GEMINI_API_KEY ? 'gemini-1.5-flash' : 'rule-engine-fallback';
 
   const payload = {
     sessionId: sessionId || crypto.randomBytes(8).toString('hex'),
     inputSymptoms: [text],
     extractedSymptoms: result.extractedSymptoms,
     answers,
-    matches: result.matches,
-    topMatch: result.topMatch,
+    matches: normalizedMatches,
+    topMatch,
     overallRisk: result.overallRisk,
     advice: typeof advice === 'string' ? advice : '',
     summary: advice?.message || '',
@@ -76,14 +97,43 @@ exports.finalize = asyncHandler(async (req, res) => {
   res.json({
     sessionId: payload.sessionId,
     extractedSymptoms: payload.extractedSymptoms,
-    matches: payload.matches,
-    topMatch: payload.topMatch,
+    matches: normalizedMatches,
+    topMatch,
     overallRisk: payload.overallRisk,
     advice,
+    suggestedDoctors,
+    aiProvider,
     disclaimer: advice.disclaimer,
     reportId: report?._id || null,
   });
 });
+
+/**
+ * Convert raw match scores (which can all be e.g. 50%) into a
+ * probability distribution that sums to 100% across the top matches.
+ * This makes the rankings legible to a non-technical user.
+ */
+function normalizeConfidences(matches) {
+  if (!Array.isArray(matches) || matches.length === 0) return [];
+  const top = matches.slice(0, 5);
+
+  // Squash so the strongest signal dominates more than a flat normalization
+  const weights = top.map((m) => Math.pow(Math.max(1, m.confidence), 1.4));
+  const sum = weights.reduce((a, b) => a + b, 0) || 1;
+
+  const scaled = top.map((m, i) => ({
+    ...m,
+    rawConfidence: m.confidence,
+    confidence: Math.round((weights[i] / sum) * 100),
+  }));
+
+  // Patch rounding so total = 100
+  const total = scaled.reduce((a, b) => a + b.confidence, 0);
+  if (scaled.length && total !== 100) {
+    scaled[0].confidence += 100 - total;
+  }
+  return scaled;
+}
 
 /**
  * Legacy endpoint kept for backward compatibility — runs full pipeline

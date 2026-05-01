@@ -175,6 +175,39 @@ export default function DoctorDashboard() {
         )}
       </div>
 
+      {/* Recent patients */}
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold mb-3">Recent patients</h2>
+        {(!dash?.recentAppointments || dash.recentAppointments.length === 0) ? (
+          <div className="card p-6 text-sm text-slate-500">
+            You haven't seen any patients yet. New bookings will appear here.
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {dedupePatients(dash.recentAppointments).slice(0, 6).map((a: any) => (
+              <div key={a._id} className="card p-4 flex gap-3">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-teal-500 grid place-items-center text-white font-semibold shrink-0">
+                  {a.patient?.name?.[0] || 'P'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-sm truncate">{a.patient?.name}</div>
+                  <div className="text-xs text-slate-500 truncate">{a.patient?.email}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    Last: {a.date} · {a.time}
+                  </div>
+                  <Link
+                    href={`/chat?with=${a.patient?._id}`}
+                    className="text-[11px] text-brand-600 font-medium mt-1 inline-block"
+                  >
+                    Chat →
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="grid md:grid-cols-2 gap-5 mt-8">
         <div className="card p-5">
           <div className="flex items-center gap-2 font-semibold mb-2">
@@ -198,10 +231,25 @@ export default function DoctorDashboard() {
           <div className="text-xs text-slate-500">
             {dash?.doctor?.reviewsCount || 0} reviews so far
           </div>
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+            Reviews appear here after patients complete consultations and submit feedback.
+          </p>
         </div>
       </div>
     </div>
   );
+}
+
+function dedupePatients(appts: any[]) {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const a of appts) {
+    const id = String(a.patient?._id || a.patient);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(a);
+  }
+  return out;
 }
 
 function Stat({ label, value, icon: Icon }: any) {

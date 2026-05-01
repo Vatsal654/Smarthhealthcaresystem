@@ -86,35 +86,58 @@ body {
   border-radius: 6px;
 }
 .lk-control-bar {
-  display: flex;
+  display: flex !important;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
   align-items: center;
   padding: 12px;
   background: #0b1220;
   border-top: 1px solid #1e293b;
+  flex-direction: row !important;
+  width: 100%;
+  bottom: 0;
+}
+.lk-control-bar > * {
+  position: static !important;
+  display: inline-flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .lk-button,
 .lk-control-bar button {
-  background: #1e293b;
-  color: #fff;
-  border: 1px solid #334155;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 14px;
+  background: #1e293b !important;
+  color: #fff !important;
+  border: 1px solid #334155 !important;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
   cursor: pointer;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
   transition: background 0.15s;
 }
 .lk-button:hover,
 .lk-control-bar button:hover {
-  background: #334155;
+  background: #334155 !important;
 }
 .lk-button[data-lk-source='disconnect'],
-.lk-disconnect-button {
-  background: #dc2626;
-  border-color: #dc2626;
+.lk-disconnect-button,
+button.lk-disconnect-button {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
 }
 .lk-button[data-lk-source='disconnect']:hover,
 .lk-disconnect-button:hover {
-  background: #b91c1c;
+  background: #b91c1c !important;
+}
+.lk-button-group {
+  display: inline-flex !important;
+  gap: 4px;
+}
+.lk-button-group-menu {
+  display: none;
 }

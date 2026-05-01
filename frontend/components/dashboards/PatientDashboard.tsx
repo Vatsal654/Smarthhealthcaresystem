@@ -165,18 +165,66 @@ export default function PatientDashboard() {
         </Link>
       </div>
 
-      <div className="mt-6 card p-6">
-        <div className="flex items-center gap-2">
-          <Stethoscope className="w-4 h-4 text-brand-600" />
-          <span className="font-semibold">Health tip of the day</span>
+      <div className="grid md:grid-cols-3 gap-5 mt-6">
+        <div className="card p-6 md:col-span-2">
+          <div className="flex items-center gap-2">
+            <Stethoscope className="w-4 h-4 text-brand-600" />
+            <span className="font-semibold">Health tip of the day</span>
+          </div>
+          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+            Hydration affects almost every system in your body. Aim for ~30 ml of water per kg
+            of body weight per day, and more if you're active or in a hot climate.
+          </p>
+          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+            7–9 hours of consistent sleep is one of the strongest predictors of immune resilience —
+            small chronic deficits add up fast.
+          </p>
         </div>
-        <p className="text-sm text-slate-600 mt-2 max-w-2xl leading-relaxed">
-          Hydration affects almost every system in your body. Aim for ~30 ml of water per kg of body weight per day,
-          and more if you're active or in a hot climate.
-        </p>
+        <div className="card p-6">
+          <div className="font-semibold mb-2">Quick actions</div>
+          <div className="space-y-2 text-sm">
+            <Link href="/ai-checker" className="block text-brand-600 hover:underline">→ Run AI health check</Link>
+            <Link href="/doctors" className="block text-brand-600 hover:underline">→ Browse doctors</Link>
+            <Link href="/appointments" className="block text-brand-600 hover:underline">→ My appointments</Link>
+            <Link href="/chat" className="block text-brand-600 hover:underline">→ Open chat</Link>
+            <Link href="/nearby" className="block text-brand-600 hover:underline">→ Nearby care</Link>
+            <Link href="/profile" className="block text-brand-600 hover:underline">→ Update medical profile</Link>
+          </div>
+        </div>
       </div>
+
+      {/* Recent AI reports preview */}
+      {reports.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-3">Recent AI checks</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {reports.slice(0, 3).map((r: any) => (
+              <div key={r._id} className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-sm">{r.topMatch?.name || 'Check-in'}</div>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${riskBadge(r.overallRisk)}`}>
+                    {r.overallRisk}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {(r.extractedSymptoms || []).slice(0, 4).join(', ') || '—'}
+                </div>
+                <div className="text-xs text-slate-400 mt-2">
+                  {new Date(r.createdAt).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function riskBadge(r?: string) {
+  if (r === 'red') return 'bg-rose-50 text-rose-700 border border-rose-200';
+  if (r === 'yellow') return 'bg-amber-50 text-amber-700 border border-amber-200';
+  return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
 }
 
 function Widget({

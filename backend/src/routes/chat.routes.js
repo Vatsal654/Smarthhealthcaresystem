@@ -5,5 +5,6 @@ const ctrl = require('../controllers/chat.controller');
 router.use(authRequired);
 router.get('/history', ctrl.history);
 router.get('/threads', ctrl.threads);
+router.get('/peer/:id', ctrl.peer);
 
 module.exports = router;
