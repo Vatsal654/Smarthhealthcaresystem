@@ -82,6 +82,11 @@ module.exports = function registerSockets(io) {
       if (room) socket.join(`wb:${room}`);
     });
 
+    socket.on('whiteboard:toggle', ({ room, open }) => {
+      if (!room) return;
+      socket.to(`wb:${room}`).emit('whiteboard:toggle', { open: !!open, from: userId });
+    });
+
     socket.on('whiteboard:stroke', ({ room, stroke }) => {
       if (!room || !stroke) return;
       socket.to(`wb:${room}`).emit('whiteboard:stroke', { stroke, from: userId });

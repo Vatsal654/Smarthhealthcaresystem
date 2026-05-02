@@ -34,27 +34,43 @@ exports.chat = asyncHandler(async (req, res) => {
     .map((m) => m.content)
     .join('. ');
 
-  // Engine pass — extract symptoms from full conversation
-  const engineResult = await symptomEngine.analyze({
+  // Symptom extraction: Gemini first, fall back to lexical engine
+  let extracted = [];
+  try {
+    extracted = await gemini.extractSymptoms(userText);
+  } catch {}
+  const lexical = await symptomEngine.analyze({ text: userText, extraSymptoms: extracted, answers: {} });
+  const allSymptoms = Array.from(new Set([...extracted, ...lexical.extractedSymptoms]));
+
+  // Re-score using merged symptom set
+  const merged = await symptomEngine.analyze({
     text: userText,
-    extraSymptoms: [],
+    extraSymptoms: extracted,
     answers: {},
   });
-  const candidates = normalizeConfidences(engineResult.matches);
+  const candidates = normalizeConfidences(merged.matches);
 
   const userTurns = messages.filter((m) => m.role === 'user').length;
   const botTurns = messages.filter((m) => m.role === 'bot' || m.role === 'assistant').length;
 
-  // Decide: ask another question, or finalize?
+  // Decide
   let decision;
   if (forceFinalize) {
-    decision = { decision: 'finalize', question: '', reasoning: 'User requested finalize', redFlag: false };
+    decision = { decision: 'finalize', question: '', reply: '', think: 'User forced finalize', redFlag: false };
   } else {
     decision = await gemini.nextStep({
       conversation: messages,
-      extractedSymptoms: engineResult.extractedSymptoms,
+      extractedSymptoms: allSymptoms,
       candidates,
       turnsAsked: botTurns,
+    });
+  }
+
+  if (decision.decision === 'chat') {
+    return res.json({
+      type: 'chat',
+      message: decision.reply || "I'm here to help — tell me what you're feeling.",
+      sessionId,
     });
   }
 
@@ -62,14 +78,14 @@ exports.chat = asyncHandler(async (req, res) => {
     return res.json({
       type: 'question',
       message: decision.question,
-      reasoning: decision.reasoning,
+      reasoning: decision.think,
       sessionId,
-      progress: { userTurns, botTurns: botTurns + 1, maxTurns: 5 },
+      progress: { userTurns, botTurns: botTurns + 1 },
     });
   }
 
-  // Finalize — compute risk + advice
-  const overallRisk = engineResult.overallRisk;
+  // Finalize
+  const overallRisk = merged.overallRisk;
   const topMatch = candidates[0] || null;
 
   let suggestedDoctors = [];
@@ -85,7 +101,7 @@ exports.chat = asyncHandler(async (req, res) => {
   }
 
   const advice = await gemini.generateAdvice({
-    extractedSymptoms: engineResult.extractedSymptoms,
+    extractedSymptoms: allSymptoms,
     matches: candidates,
     overallRisk,
     answers: { conversation: messages },
@@ -97,7 +113,7 @@ exports.chat = asyncHandler(async (req, res) => {
     user: req.user.id,
     sessionId,
     inputSymptoms: messages.filter((m) => m.role === 'user').map((m) => m.content),
-    extractedSymptoms: engineResult.extractedSymptoms,
+    extractedSymptoms: allSymptoms,
     answers: { conversation: messages },
     matches: candidates,
     topMatch,
@@ -109,7 +125,7 @@ exports.chat = asyncHandler(async (req, res) => {
   res.json({
     type: 'report',
     sessionId,
-    extractedSymptoms: engineResult.extractedSymptoms,
+    extractedSymptoms: allSymptoms,
     matches: candidates,
     topMatch,
     overallRisk,
@@ -119,6 +135,22 @@ exports.chat = asyncHandler(async (req, res) => {
     disclaimer: advice.disclaimer,
     reportId: report._id,
   });
+});
+
+/**
+ * Free-form follow-up after a report (e.g. "explain home care in detail").
+ * Body: { reportId, question }
+ */
+exports.followUp = asyncHandler(async (req, res) => {
+  const { reportId, question } = req.body;
+  if (!reportId || !question) throw ApiError.badRequest('reportId and question required');
+
+  const report = await AIReport.findById(reportId).lean();
+  if (!report) throw ApiError.notFound();
+  if (String(report.user) !== req.user.id) throw ApiError.forbidden();
+
+  const reply = await gemini.freeFollowUp({ report, question });
+  res.json({ reply });
 });
 
 /**

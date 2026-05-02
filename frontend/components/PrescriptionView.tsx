@@ -17,8 +17,8 @@ export default function PrescriptionView({
   const dateStr = new Date(prescription.createdAt || Date.now()).toLocaleString();
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm grid place-items-center z-50 p-4 overflow-auto">
-      <div className="card w-full max-w-2xl bg-white max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm grid place-items-center z-50 p-4 overflow-auto text-slate-900">
+      <div className="card w-full max-w-2xl bg-white max-h-[90vh] overflow-y-auto text-slate-900">
         <div className="flex items-center justify-between p-5 border-b border-slate-100 sticky top-0 bg-white">
           <h3 className="text-lg font-bold">Prescription</h3>
           <div className="flex gap-1">

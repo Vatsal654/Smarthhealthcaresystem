@@ -48,6 +48,21 @@ body {
 /* Leaflet marker fix in Next */
 .leaflet-container { height: 100%; width: 100%; border-radius: 1rem; }
 
+/* Subtle dotted background pattern (WhatsApp-style ambient texture) */
+.bg-pattern {
+  background-image:
+    radial-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    radial-gradient(rgba(37, 99, 235, 0.04) 1px, transparent 1px);
+  background-size: 22px 22px, 36px 36px;
+  background-position: 0 0, 11px 11px;
+}
+.bg-cross {
+  background-image:
+    linear-gradient(45deg, rgba(15, 23, 42, 0.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(15, 23, 42, 0.03) 25%, transparent 25%);
+  background-size: 18px 18px;
+}
+
 /* Smooth-in animations used across the app */
 @keyframes shs-fade-up {
   from { opacity: 0; transform: translateY(6px); }

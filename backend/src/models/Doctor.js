@@ -31,6 +31,7 @@ const doctorSchema = new mongoose.Schema(
     rejectionReason: { type: String },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     reviewsCount: { type: Number, default: 0 },
+    availableNow: { type: Boolean, default: false, index: true },
     availableDays: [
       { type: String, enum: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
     ],

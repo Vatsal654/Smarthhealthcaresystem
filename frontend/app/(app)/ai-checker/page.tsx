@@ -14,6 +14,7 @@ import {
   RotateCcw,
   CheckCircle,
   Loader2,
+  MessageSquare,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/PageHeader';
@@ -24,13 +25,9 @@ type Role = 'user' | 'bot';
 
 interface Msg { role: Role; content: string; }
 
-interface Match {
-  name: string;
-  confidence: number;
-  riskLevel: Risk;
-  specialist?: string;
-}
+interface Match { name: string; confidence: number; riskLevel: Risk; specialist?: string; }
 interface Advice {
+  primaryCondition?: string;
   message: string;
   remedies: { title: string; description?: string }[];
   medicines: { name: string; dosage?: string; purpose?: string; sideEffects?: string }[];
@@ -52,6 +49,7 @@ interface SuggestedDoctor {
 }
 interface FinalReport {
   sessionId: string;
+  reportId: string;
   extractedSymptoms: string[];
   matches: Match[];
   topMatch: Match | null;
@@ -74,33 +72,40 @@ export default function AICheckerPage() {
     {
       role: 'bot',
       content:
-        "Hi, I'm your AI health assistant. Tell me what's troubling you — I'll ask follow-up questions and then give you a personalized report.",
+        "Hi, I'm your AI health assistant. Tell me what's troubling you in your own words — I'll ask follow-up questions and then give you a personalized report. You can also chat with me normally.",
     },
   ]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [report, setReport] = useState<FinalReport | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>();
-  const [progress, setProgress] = useState<{ botTurns: number; maxTurns: number }>({ botTurns: 1, maxTurns: 5 });
+  const [progress, setProgress] = useState<{ botTurns: number }>({ botTurns: 1 });
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, thinking, report]);
 
-  async function send(text: string, opts?: { finalize?: boolean }) {
-    if (report) return;
+  async function sendChat(text: string, opts?: { finalize?: boolean }) {
     const trimmed = text.trim();
     if (!trimmed && !opts?.finalize) return;
 
-    const next = trimmed
-      ? [...messages, { role: 'user' as const, content: trimmed }]
-      : messages;
+    const next = trimmed ? [...messages, { role: 'user' as const, content: trimmed }] : messages;
     setMessages(next);
     setInput('');
     setThinking(true);
 
     try {
+      // If we already have a report, this is a free-form follow-up question
+      if (report) {
+        const { data } = await api.post('/ai/followup', {
+          reportId: report.reportId,
+          question: trimmed,
+        });
+        setMessages((m) => [...m, { role: 'bot', content: data.reply }]);
+        return;
+      }
+
       const { data } = await api.post('/ai/chat', {
         messages: next,
         sessionId,
@@ -108,12 +113,18 @@ export default function AICheckerPage() {
       });
       setSessionId(data.sessionId);
 
-      if (data.type === 'question') {
+      if (data.type === 'chat' || data.type === 'question') {
         setMessages((m) => [...m, { role: 'bot', content: data.message }]);
         if (data.progress) setProgress(data.progress);
       } else if (data.type === 'report') {
         setReport(data);
-        setMessages((m) => [...m, { role: 'bot', content: data.advice?.message || 'Here is your report.' }]);
+        setMessages((m) => [
+          ...m,
+          {
+            role: 'bot',
+            content: `Here's your report. You can ask me follow-up questions below — like "give me the home care in detail" or "can I take ibuprofen?"`,
+          },
+        ]);
       }
     } catch (err) {
       toast.error(apiError(err));
@@ -123,34 +134,28 @@ export default function AICheckerPage() {
   }
 
   function reset() {
-    setMessages([
-      {
-        role: 'bot',
-        content:
-          "Hi again — tell me what's troubling you and I'll ask follow-up questions until I can give you a clear report.",
-      },
-    ]);
+    setMessages([{ role: 'bot', content: "Tell me what's troubling you and I'll guide you." }]);
     setReport(null);
     setSessionId(undefined);
     setInput('');
-    setProgress({ botTurns: 1, maxTurns: 5 });
+    setProgress({ botTurns: 1 });
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-pattern">
       <div className="px-6 md:px-10 pt-6 md:pt-10 pb-3">
         <PageHeader
           title="AI Symptom Checker"
           subtitle={
             report
-              ? 'Personalized report ready. You can run a new check below.'
-              : 'Tell me what you feel — I think between each answer and ask the next best question.'
+              ? 'Report ready — ask me anything else below.'
+              : 'Tell me what you feel — I think between answers and ask the next best question.'
           }
           right={
             <div className="flex items-center gap-3">
-              {!report && messages.length > 1 && (
+              {!report && messages.filter((m) => m.role === 'user').length > 0 && (
                 <button
-                  onClick={() => send('', { finalize: true })}
+                  onClick={() => sendChat('', { finalize: true })}
                   className="btn-outline text-sm"
                   disabled={thinking}
                 >
@@ -176,70 +181,72 @@ export default function AICheckerPage() {
           {thinking && (
             <div className="flex items-center gap-2 text-slate-500 text-sm pl-11">
               <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
-              {report ? 'Compiling…' : 'Thinking…'}
+              {report ? 'Generating answer…' : 'Thinking…'}
             </div>
           )}
 
-          {report && <FinalReportCard report={report} onReset={reset} />}
+          {report && <FinalReportCard report={report} />}
         </div>
       </div>
 
-      {!report && (
-        <div className="border-t border-slate-100 bg-white px-6 md:px-10 py-4">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              send(input);
-            }}
-            className="max-w-3xl mx-auto"
-          >
-            {messages.length === 1 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {STARTERS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => send(s)}
-                    className="text-sm px-3 py-1.5 rounded-full border border-slate-200 hover:border-brand-300 hover:bg-brand-50 text-slate-700 transition"
-                  >
-                    <Sparkles className="inline w-3.5 h-3.5 mr-1 text-brand-500" />
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your reply…"
-                className="input"
-                autoFocus
-              />
-              <button disabled={thinking || !input.trim()} className="btn-primary">
-                <Send className="w-4 h-4" />
-              </button>
+      <div className="border-t border-slate-100 bg-white px-6 md:px-10 py-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendChat(input);
+          }}
+          className="max-w-3xl mx-auto"
+        >
+          {messages.length === 1 && !report && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {STARTERS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => sendChat(s)}
+                  className="text-sm px-3 py-1.5 rounded-full border border-slate-200 hover:border-brand-300 hover:bg-brand-50 text-slate-700 transition"
+                >
+                  <Sparkles className="inline w-3.5 h-3.5 mr-1 text-brand-500" />
+                  {s}
+                </button>
+              ))}
             </div>
-            <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400">
-              <span>
-                Question {Math.min(progress.botTurns, progress.maxTurns)} of {progress.maxTurns}
-              </span>
-              <span>SHS gives indicative guidance only — not a diagnosis.</span>
-            </div>
-          </form>
-        </div>
-      )}
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={report ? 'Ask anything about your report…' : 'Type your reply…'}
+              className="input"
+              autoFocus
+            />
+            <button disabled={thinking || !input.trim()} className="btn-primary">
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400">
+            <span>
+              {report ? (
+                <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> Follow-up mode</span>
+              ) : (
+                <>Question {progress.botTurns}</>
+              )}
+            </span>
+            <span>SHS gives indicative guidance only — not a diagnosis.</span>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
 
 function BotBubble({ text }: { text: string }) {
   return (
-    <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="flex gap-3 animate-in">
       <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-teal-500 grid place-items-center text-white shrink-0">
         <Bot className="w-4 h-4" />
       </div>
-      <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 text-slate-800 leading-relaxed shadow-soft max-w-[85%]">
+      <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 text-slate-800 leading-relaxed shadow-soft max-w-[85%] whitespace-pre-wrap">
         {text}
       </div>
     </div>
@@ -248,42 +255,69 @@ function BotBubble({ text }: { text: string }) {
 
 function UserBubble({ text }: { text: string }) {
   return (
-    <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-200">
+    <div className="flex justify-end animate-in">
       <div className="bg-brand-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%]">{text}</div>
     </div>
   );
 }
 
-function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: () => void }) {
-  const risk = report.overallRisk;
-  const banner =
-    risk === 'red'
-      ? { tone: 'risk-red', label: 'High risk — seek care now', Icon: ShieldAlert }
-      : risk === 'yellow'
-      ? { tone: 'risk-yellow', label: 'Moderate — monitor and treat', Icon: AlertTriangle }
-      : { tone: 'risk-green', label: 'Mild — home care should help', Icon: Leaf };
+function riskTheme(r: Risk) {
+  if (r === 'red') return {
+    block: 'bg-rose-600 text-white border-rose-700',
+    badge: 'bg-rose-700 text-white',
+    label: 'High risk — seek care now',
+    Icon: ShieldAlert,
+  };
+  if (r === 'yellow') return {
+    block: 'bg-amber-500 text-white border-amber-600',
+    badge: 'bg-amber-600 text-white',
+    label: 'Moderate — monitor and treat',
+    Icon: AlertTriangle,
+  };
+  return {
+    block: 'bg-emerald-500 text-white border-emerald-600',
+    badge: 'bg-emerald-600 text-white',
+    label: 'Mild — home care should help',
+    Icon: Leaf,
+  };
+}
+
+function FinalReportCard({ report }: { report: FinalReport }) {
+  const theme = riskTheme(report.overallRisk);
+  const top = report.topMatch || report.matches[0];
+  const primaryName = report.advice.primaryCondition || top?.name || 'a condition';
 
   return (
-    <div className="ml-11 space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-500">
-      <div className={`card p-5 ${banner.tone}`} style={{ borderWidth: 1 }}>
-        <div className="flex items-center gap-2 font-semibold">
-          <banner.Icon className="w-5 h-5" />
-          {banner.label}
+    <div className="ml-11 space-y-4 animate-in">
+      {/* Big colored verdict block */}
+      <div className={`rounded-2xl border-2 p-6 shadow-soft ${theme.block}`}>
+        <div className="flex items-center gap-2 text-sm font-semibold opacity-90">
+          <theme.Icon className="w-5 h-5" />
+          {theme.label}
         </div>
-        <p className="text-sm mt-2 leading-relaxed">{report.advice.message}</p>
+        <div className="text-3xl font-extrabold mt-3 leading-tight">{primaryName}</div>
+        {top && (
+          <div className="mt-2 text-sm opacity-90">
+            {top.confidence}% likelihood · {top.specialist || 'General Physician'}
+          </div>
+        )}
+        <p className="text-sm mt-4 leading-relaxed opacity-95">{report.advice.message}</p>
         {report.extractedSymptoms.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-3">
+          <div className="flex flex-wrap gap-1.5 mt-4">
             {report.extractedSymptoms.map((s) => (
-              <span key={s} className="chip">{s}</span>
+              <span key={s} className="text-[11px] px-2 py-1 rounded-full bg-white/20 text-white">
+                {s}
+              </span>
             ))}
           </div>
         )}
       </div>
 
-      {report.matches.length > 0 && (
+      {/* Other candidates */}
+      {report.matches.length > 1 && (
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-semibold text-slate-700">Symptoms may be associated with</div>
+            <div className="text-sm font-semibold text-slate-700">Other possibilities</div>
             {report.aiProvider && (
               <span className="text-[10px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-brand-500" />
@@ -292,7 +326,7 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
             )}
           </div>
           <div className="space-y-2">
-            {report.matches.slice(0, 3).map((m) => (
+            {report.matches.slice(1, 4).map((m) => (
               <div key={m.name} className="bg-slate-50 rounded-xl px-3 py-2.5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -301,7 +335,6 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-lg font-bold">{m.confidence}%</div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">likelihood</div>
                   </div>
                 </div>
                 <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
@@ -314,20 +347,20 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
             ))}
           </div>
           <p className="text-[11px] text-slate-400 mt-3">
-            Likelihoods are normalized across the top matches.
+            Likelihoods are normalized so the top candidates sum to 100%.
           </p>
         </div>
       )}
 
       {report.suggestedDoctors?.length > 0 && (
-        <SuggestedDoctorsCard risk={risk} specialty={report.topMatch?.specialist} doctors={report.suggestedDoctors} />
+        <SuggestedDoctorsCard risk={report.overallRisk} specialty={top?.specialist} doctors={report.suggestedDoctors} />
       )}
 
-      {risk === 'green' && report.advice.remedies.length > 0 && (
+      {report.overallRisk === 'green' && report.advice.remedies.length > 0 && (
         <Section icon={Leaf} title="Home remedies" tone="green" items={report.advice.remedies} />
       )}
 
-      {risk === 'yellow' && (
+      {report.overallRisk === 'yellow' && (
         <>
           {report.advice.remedies.length > 0 && (
             <Section icon={Leaf} title="Home care" tone="green" items={report.advice.remedies} />
@@ -363,7 +396,7 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
         </>
       )}
 
-      {risk === 'red' && (
+      {report.overallRisk === 'red' && (
         <>
           {report.advice.urgentActions.length > 0 && (
             <Section icon={ShieldAlert} title="What to do right now" tone="red" items={report.advice.urgentActions} />
@@ -384,7 +417,9 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
               {report.advice.doctorAdvice || 'Please book a video consultation now or visit the nearest emergency room.'}
             </p>
             <div className="flex gap-2 mt-3">
-              <Link href="/doctors" className="btn-primary text-sm py-2"><Stethoscope className="w-4 h-4" /> Book doctor now</Link>
+              <Link href="/doctors?tab=emergency" className="btn-primary text-sm py-2">
+                <Stethoscope className="w-4 h-4" /> Emergency doctors
+              </Link>
               <Link href="/nearby?type=hospital" className="btn-outline text-sm py-2">Find ER nearby</Link>
             </div>
           </div>
@@ -392,10 +427,6 @@ function FinalReportCard({ report, onReset }: { report: FinalReport; onReset: ()
       )}
 
       <div className="text-[11px] text-slate-400 px-2">{report.advice.disclaimer || report.disclaimer}</div>
-
-      <button onClick={onReset} className="btn-outline text-sm">
-        <RotateCcw className="w-4 h-4" /> Run another check
-      </button>
     </div>
   );
 }

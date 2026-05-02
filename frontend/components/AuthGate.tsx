@@ -22,7 +22,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex bg-pattern">
       <Sidebar user={user} />
       <main className="flex-1 min-w-0">{children}</main>
     </div>

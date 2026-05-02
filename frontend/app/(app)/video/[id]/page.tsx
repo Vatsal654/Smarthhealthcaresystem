@@ -31,6 +31,7 @@ import { api, apiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import Whiteboard from '@/components/Whiteboard';
 import PrescriptionForm from '@/components/PrescriptionForm';
+import { getSocket } from '@/lib/socket';
 
 export default function VideoPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,6 +60,24 @@ export default function VideoPage() {
       .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Sync whiteboard open/close across both sides
+  useEffect(() => {
+    if (!room) return;
+    const socket = getSocket();
+    socket.emit('whiteboard:join', { room });
+    function onToggle({ open }: { open: boolean }) {
+      setShowWb(open);
+    }
+    socket.on('whiteboard:toggle', onToggle);
+    return () => { socket.off('whiteboard:toggle', onToggle); };
+  }, [room]);
+
+  function toggleWb() {
+    const next = !showWb;
+    setShowWb(next);
+    if (room) getSocket().emit('whiteboard:toggle', { room, open: next });
+  }
 
   if (loading) {
     return (
@@ -113,7 +132,7 @@ export default function VideoPage() {
 
         <RoomAudioRenderer />
         <CustomControls
-          onToggleWhiteboard={() => setShowWb((v) => !v)}
+          onToggleWhiteboard={toggleWb}
           isDoctor={isDoctor}
           showWb={showWb}
           onOpenPrescription={() => setShowRx(true)}

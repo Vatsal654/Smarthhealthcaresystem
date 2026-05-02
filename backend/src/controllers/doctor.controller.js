@@ -77,6 +77,26 @@ exports.updateMyDoctorProfile = asyncHandler(async (req, res) => {
   res.json({ doctor });
 });
 
+exports.emergency = asyncHandler(async (req, res) => {
+  const docs = await Doctor.find({ verificationStatus: 'verified', availableNow: true })
+    .populate('user', 'name email avatarUrl')
+    .sort({ rating: -1, updatedAt: -1 })
+    .limit(20)
+    .lean();
+  res.json({ doctors: docs });
+});
+
+exports.toggleAvailability = asyncHandler(async (req, res) => {
+  const { availableNow } = req.body;
+  const doc = await Doctor.findOneAndUpdate(
+    { user: req.user.id },
+    { availableNow: !!availableNow },
+    { new: true }
+  );
+  if (!doc) throw ApiError.notFound('Doctor profile not found');
+  res.json({ doctor: doc });
+});
+
 exports.specialties = asyncHandler(async (req, res) => {
   const list = await Doctor.distinct('specialization', {
     verificationStatus: 'verified',
