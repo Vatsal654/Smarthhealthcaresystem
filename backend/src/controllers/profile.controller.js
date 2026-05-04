@@ -1,4 +1,6 @@
 const MedicalProfile = require('../models/MedicalProfile');
+const User = require('../models/User');
+const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
 exports.getProfile = asyncHandler(async (req, res) => {
@@ -31,4 +33,15 @@ exports.upsertProfile = asyncHandler(async (req, res) => {
     { new: true, upsert: true }
   );
   res.json({ profile });
+});
+
+// Doctor-only: view a patient's medical profile
+exports.getPatientProfile = asyncHandler(async (req, res) => {
+  if (req.user.role !== 'doctor' && req.user.role !== 'admin') {
+    throw ApiError.forbidden('Only doctors can view patient profiles');
+  }
+  const patient = await User.findById(req.params.userId).lean();
+  if (!patient || patient.role !== 'patient') throw ApiError.notFound('Patient not found');
+  const profile = (await MedicalProfile.findOne({ user: req.params.userId }).lean()) || null;
+  res.json({ patient: { name: patient.name, email: patient.email }, profile });
 });

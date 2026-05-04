@@ -11,6 +11,7 @@ import {
   MessagesSquare,
   Star,
   Stethoscope,
+  Zap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/PageHeader';
@@ -34,12 +35,18 @@ export default function DoctorDashboard() {
   const { user } = useAuth();
   const [dash, setDash] = useState<Dash | null>(null);
   const [loading, setLoading] = useState(true);
+  const [availableNow, setAvailableNow] = useState(false);
+  const [togglingAvail, setTogglingAvail] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const { data } = await api.get('/doctors/me/dashboard');
-      setDash(data);
+      const [dashRes, profileRes] = await Promise.all([
+        api.get('/doctors/me/dashboard'),
+        api.get('/doctors/me/profile').catch(() => ({ data: { doctor: null } })),
+      ]);
+      setDash(dashRes.data);
+      if (profileRes.data.doctor) setAvailableNow(!!profileRes.data.doctor.availableNow);
     } catch (err) {
       toast.error(apiError(err));
     } finally {
@@ -50,6 +57,20 @@ export default function DoctorDashboard() {
   useEffect(() => {
     load();
   }, []);
+
+  async function toggleAvailability() {
+    setTogglingAvail(true);
+    try {
+      const next = !availableNow;
+      await api.post('/doctors/me/availability', { availableNow: next });
+      setAvailableNow(next);
+      toast.success(next ? "You're now visible as available for emergency consults" : 'Marked as offline');
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally {
+      setTogglingAvail(false);
+    }
+  }
 
   async function setStatus(id: string, status: string) {
     try {
@@ -105,6 +126,29 @@ export default function DoctorDashboard() {
             className="h-full w-full object-cover"
           />
         </div>
+      </div>
+
+      {/* Available-now toggle */}
+      <div className="card p-4 mb-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl grid place-items-center shrink-0 ${availableNow ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+            <Zap className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-semibold text-sm">Available for emergency consultations</div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {availableNow ? "You're visible to patients seeking urgent help." : 'Toggle on to appear under "Available now" for patients.'}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={toggleAvailability}
+          disabled={togglingAvail}
+          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition disabled:opacity-60 ${availableNow ? 'bg-emerald-500' : 'bg-slate-300'}`}
+        >
+          <span className={`inline-block h-5 w-5 rounded-full bg-white transition ${availableNow ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
       </div>
 
       {!verified && (

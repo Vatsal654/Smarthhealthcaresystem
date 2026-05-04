@@ -9,7 +9,7 @@ function getJsonModel() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
   jsonModel = new GoogleGenerativeAI(key).getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     generationConfig: { temperature: 0.5, maxOutputTokens: 1100, responseMimeType: 'application/json' },
   });
   return jsonModel;
@@ -20,7 +20,7 @@ function getTextModel() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
   textModel = new GoogleGenerativeAI(key).getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     generationConfig: { temperature: 0.6, maxOutputTokens: 700 },
   });
   return textModel;
@@ -64,7 +64,7 @@ Strict JSON output:
 async function nextStep({ conversation = [], extractedSymptoms = [], candidates = [], turnsAsked = 0 }) {
   const m = getJsonModel();
   if (!m) {
-    return heuristicNextStep({ extractedSymptoms, candidates, turnsAsked });
+    return heuristicNextStep({ extractedSymptoms, candidates, turnsAsked, conversation });
   }
 
   const dialogue = conversation
@@ -104,11 +104,11 @@ Output strict JSON now.`;
     };
   } catch (err) {
     logger.warn('Gemini nextStep failed, using heuristic:', err.message);
-    return heuristicNextStep({ extractedSymptoms, candidates, turnsAsked });
+    return heuristicNextStep({ extractedSymptoms, candidates, turnsAsked, conversation });
   }
 }
 
-function heuristicNextStep({ extractedSymptoms, candidates, turnsAsked }) {
+function heuristicNextStep({ extractedSymptoms, candidates, turnsAsked, conversation = [] }) {
   const top = candidates[0];
   const second = candidates[1];
 
@@ -119,27 +119,74 @@ function heuristicNextStep({ extractedSymptoms, candidates, turnsAsked }) {
   if (extractedSymptoms.length === 0) {
     return {
       decision: 'ask',
-      question: "Could you tell me more about what's bothering you — where you feel it and how long?",
+      question: "Could you tell me more about what's bothering you — where do you feel it and for how long?",
       reply: '',
       think: 'No symptoms extracted',
       redFlag: false,
     };
   }
-  const generic = [
-    'How long have you had these symptoms?',
-    'Any fever? If yes, how high?',
-    'Any chest pain or breathing difficulty?',
-    'Any vomiting, diarrhea, or stomach pain?',
-    'Any rash or skin changes?',
-    'Do you have chronic conditions or allergies?',
-    'Have you taken any medication for this so far?',
-    'On a scale of 1-10, how severe is it?',
-  ];
+
+  // Build a symptom-relevant question pool so we never ask about rash when someone says headache
+  const sym = new Set(extractedSymptoms);
+  const pool = [];
+
+  // Duration is always useful
+  pool.push('How long have you had these symptoms — hours, days, or longer?');
+
+  // Severity
+  pool.push('On a scale of 1-10, how severe would you say it is right now?');
+
+  // Fever probing (only if fever not already mentioned)
+  if (!sym.has('fever')) pool.push('Do you have a fever or feel unusually hot?');
+
+  // Headache-specific
+  if (sym.has('headache')) {
+    pool.push('Is the headache throbbing or more of a pressure/tightness feeling?');
+    if (!sym.has('nausea') && !sym.has('vomiting'))
+      pool.push('Along with the headache, any nausea, vomiting, or sensitivity to light?');
+    if (!sym.has('dizziness'))
+      pool.push('Any dizziness or vision changes alongside the headache?');
+  }
+
+  // Respiratory / throat
+  if (sym.has('cough') || sym.has('sore throat') || sym.has('congestion') || sym.has('runny nose')) {
+    if (!sym.has('shortness of breath'))
+      pool.push('Any difficulty breathing or tightness in your chest?');
+    pool.push('Is the cough dry or are you bringing up phlegm?');
+  }
+
+  // GI
+  if (sym.has('vomiting') || sym.has('nausea') || sym.has('diarrhea') || sym.has('stomach pain')) {
+    pool.push('Have you been able to keep fluids down, or is every sip coming back up?');
+    pool.push('Any blood in vomit or stool?');
+  }
+
+  // Chest pain — red flag probe
+  if (sym.has('chest pain')) {
+    pool.push('Does the chest pain radiate to your arm, jaw, or back?');
+  }
+
+  // General fallbacks (non-symptom-specific but still useful)
+  pool.push('Have you taken any medication for this so far?');
+  pool.push('Do you have any known allergies or chronic conditions like diabetes, asthma, or hypertension?');
+  pool.push('Have you been in contact with anyone who is sick recently?');
+
+  // Filter out questions that are too close to something the bot already asked
+  const botMessages = conversation
+    .filter((c) => c.role === 'bot' || c.role === 'assistant')
+    .map((c) => (c.content || '').toLowerCase());
+
+  const unused = pool.filter(
+    (q) => !botMessages.some((m) => m.includes(q.slice(0, 22).toLowerCase()))
+  );
+
+  const question = unused.length > 0 ? unused[0] : pool[turnsAsked % pool.length];
+
   return {
     decision: 'ask',
-    question: generic[Math.min(turnsAsked, generic.length - 1)],
+    question,
     reply: '',
-    think: 'Heuristic',
+    think: 'Heuristic (context-aware)',
     redFlag: false,
   };
 }

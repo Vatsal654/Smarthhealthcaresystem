@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Video, MessagesSquare, Calendar, CheckCircle2, XCircle, Clock, FileSignature, FileText } from 'lucide-react';
+import { Video, MessagesSquare, Calendar, CheckCircle2, XCircle, Clock, FileSignature, FileText, UserSquare2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/PageHeader';
 import { api, apiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import PrescriptionForm from '@/components/PrescriptionForm';
 import PrescriptionView from '@/components/PrescriptionView';
+import PatientProfileModal from '@/components/PatientProfileModal';
 
 interface Appointment {
   _id: string;
@@ -36,6 +37,7 @@ export default function AppointmentsPage() {
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [rxFor, setRxFor] = useState<Appointment | null>(null);
   const [viewing, setViewing] = useState<any | null>(null);
+  const [viewingPatient, setViewingPatient] = useState<{ id: string; name: string } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -145,6 +147,15 @@ export default function AppointmentsPage() {
                     <FileSignature className="w-4 h-4" /> Write Rx
                   </button>
                 )}
+                {isDoctor && (
+                  <button
+                    onClick={() => setViewingPatient({ id: a.patient?._id, name: a.patient?.name })}
+                    className="btn-outline text-sm py-2"
+                    title="View patient medical profile"
+                  >
+                    <UserSquare2 className="w-4 h-4" /> Profile
+                  </button>
+                )}
                 {!isDoctor && prescriptionFor(a._id) && (
                   <button
                     onClick={() => setViewing(prescriptionFor(a._id))}
@@ -168,6 +179,13 @@ export default function AppointmentsPage() {
         />
       )}
       {viewing && <PrescriptionView prescription={viewing} onClose={() => setViewing(null)} />}
+      {viewingPatient && (
+        <PatientProfileModal
+          patientId={viewingPatient.id}
+          patientName={viewingPatient.name}
+          onClose={() => setViewingPatient(null)}
+        />
+      )}
     </div>
   );
 }

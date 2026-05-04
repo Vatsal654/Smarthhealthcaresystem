@@ -17,7 +17,6 @@ export default function DoctorProfile() {
     languages: '',
   });
   const [verificationStatus, setVerificationStatus] = useState<string>('pending');
-  const [availableNow, setAvailableNow] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -25,7 +24,6 @@ export default function DoctorProfile() {
       const d = data.doctor;
       if (!d) return;
       setVerificationStatus(d.verificationStatus);
-      setAvailableNow(!!d.availableNow);
       setForm({
         specialization: d.specialization || '',
         degree: d.degree || '',
@@ -80,37 +78,6 @@ export default function DoctorProfile() {
           </span>
         }
       />
-
-      <div className="card p-5 mb-4 flex items-center justify-between">
-        <div>
-          <div className="font-semibold">Available for emergency consultations</div>
-          <p className="text-sm text-slate-500 mt-0.5">
-            When ON, your profile appears under "Available now" for patients seeking urgent help.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              const next = !availableNow;
-              await api.post('/doctors/me/availability', { availableNow: next });
-              setAvailableNow(next);
-              toast.success(next ? "You're now visible as available" : 'Marked offline');
-            } catch (err) {
-              toast.error(apiError(err));
-            }
-          }}
-          className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
-            availableNow ? 'bg-emerald-500' : 'bg-slate-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-5 w-5 rounded-full bg-white transition ${
-              availableNow ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
 
       <form onSubmit={save} className="card p-6 space-y-4">
         <div className="grid grid-cols-2 gap-3">

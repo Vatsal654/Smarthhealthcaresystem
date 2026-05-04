@@ -186,7 +186,7 @@ function deriveRisk(matches, userSymptoms) {
   if (flagged) return 'red';
   if (!top) return 'green';
   if (top.confidence >= 80 && top.severity === 'severe') return 'red';
-  if (top.confidence >= 30) return 'yellow';
+  if (top.confidence > 30) return 'yellow';
   return 'green';
 }
 

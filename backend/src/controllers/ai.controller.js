@@ -107,7 +107,7 @@ exports.chat = asyncHandler(async (req, res) => {
     answers: { conversation: messages },
   });
 
-  const aiProvider = process.env.GEMINI_API_KEY ? 'gemini-1.5-flash' : 'rule-engine-fallback';
+  const aiProvider = process.env.GEMINI_API_KEY ? 'gemini-2.0-flash' : 'rule-engine-fallback';
 
   const report = await AIReport.create({
     user: req.user.id,
@@ -221,7 +221,7 @@ exports.finalize = asyncHandler(async (req, res) => {
     answers,
   });
 
-  const aiProvider = process.env.GEMINI_API_KEY ? 'gemini-1.5-flash' : 'rule-engine-fallback';
+  const aiProvider = process.env.GEMINI_API_KEY ? 'gemini-2.0-flash' : 'rule-engine-fallback';
 
   const payload = {
     sessionId: sessionId || crypto.randomBytes(8).toString('hex'),
